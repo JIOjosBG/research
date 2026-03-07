@@ -3,7 +3,10 @@ name: Daily Slack Pic Changer
 on:
   schedule:
     - cron: "0 0 * * *"  # Runs daily at 00:00 UTC
-  workflow_dispatch:     # Optional: allows manual trigger
+  workflow_dispatch:     # Optional manual trigger
+
+env:
+  SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
 
 jobs:
   run-script:
