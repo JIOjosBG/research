@@ -1,0 +1,31 @@
+name: Daily Slack Pic Changer
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # Runs daily at 00:00 UTC
+  workflow_dispatch:     # Optional: allows manual trigger
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd slack_pic_changer
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run main.py
+        run: |
+          cd slack_pic_changer
+          source venv/bin/activate
+          python main.py
