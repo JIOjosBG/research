@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Chess</title>
 <style>
-body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;color:#eee;display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;color:#eee;display:flex;gap:24px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
 #board{display:grid;grid-template-columns:repeat(8,min(11vw,64px));border:2px solid #555}
 .sq{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:min(8vw,46px);cursor:pointer;user-select:none}
 .l{background:#eed9b6;color:#000}.d{background:#b58863;color:#000}
@@ -20,8 +20,9 @@ body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;colo
 <div id="board"></div>
 <div class="panel">
  <h3>New game</h3>
- White <select id="w"><option value="human">Human</option><option value="claude">Claude (API)</option><option value="jev">Jev (TypeSafe API)</option></select>
- Black <select id="b"><option value="human">Human</option><option value="claude">Claude (API)</option><option value="jev">Jev (TypeSafe API)</option></select>
+ White <select id="w"><option value="human">Human</option></select>
+ Black <select id="b"><option value="human">Human</option></select>
+ <button onclick="loadModels(true)">Refresh model lists</button>
  <button onclick="newGame()">Start</button>
  <div id="status"></div><div id="hist"></div>
  <div id="cost"></div>
@@ -33,7 +34,8 @@ const SYM={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'�
 let S=null,sel=null,busy=false;
 const $=id=>document.getElementById(id);
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw new Error(j.error);return j}
-async function newGame(){try{S=await api('/api/new',{white:{type:$('w').value},black:{type:$('b').value}});sel=null;render();loop()}catch(e){$('status').textContent=e.message}}
+const spec=v=>{const [type,...m]=v.split('|');return {type,model:m.join('|')||undefined}};
+async function newGame(){try{S=await api('/api/new',{white:spec($('w').value),black:spec($('b').value)});sel=null;render();loop()}catch(e){$('status').textContent=e.message}}
 function isHuman(){return S.players[S.turn].type==='human'}
 async function loop(){
  if(busy)return;busy=true;
@@ -72,11 +74,24 @@ function renderCost(){
  const ai=['white','black'].filter(c=>S.players[c].type!=='human');
  if(!ai.length){$('cost').innerHTML='';return}
  let h='<b>API cost (estimate)</b><table><tr><th>Side</th><th>In tok</th><th>Out tok</th><th>Cost</th></tr>';
- for(const c of ai){const t=S.totals[c];h+=`<tr><td>${c} (${S.players[c].type})</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${usd(t.cost_usd)}</td></tr>`}
+ for(const c of ai){const t=S.totals[c];h+=`<tr><td>${c} (${who(c)})</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${usd(t.cost_usd)}</td></tr>`}
  h+='</table><div id="costlog"><table><tr><th>Move</th><th>Req</th><th>In</th><th>Out</th><th>Cost</th></tr>';
  for(const x of [...S.costs].reverse())h+=`<tr><td>${(x.ply/2|0)+1}${x.color==='white'?'.':'...'} ${x.move??'(error)'}</td><td>${x.requests}</td><td>${x.input_tokens}</td><td>${x.output_tokens}</td><td>${usd(x.cost_usd)}</td></tr>`;
  $('cost').innerHTML=h+'</table></div>';
 }
+async function loadModels(refresh){
+ $('status').textContent='Loading model lists…';
+ let list;try{list=await api('/api/models'+(refresh?'?refresh=1':''))}catch(e){$('status').textContent=e.message;return}
+ for(const id of ['w','b']){const sel=$(id),keep=sel.value;sel.innerHTML='<option value="human">Human</option>';
+  for(const p of list){const g=document.createElement('optgroup');g.label=p.label;
+   if(p.error){const o=new Option(p.label+': '+p.error,'');o.disabled=true;g.appendChild(o)}
+   for(const m of p.models){const name=m.name.startsWith(p.label)?m.name:p.label+' – '+m.name;g.appendChild(new Option(name,p.type+'|'+m.id))}
+   sel.appendChild(g)}
+  if([...sel.options].some(o=>o.value===keep))sel.value=keep}
+ $('status').textContent='';
+}
+loadModels(false);
+const who=c=>{const p=S.players[c];return p.model?p.model:p.type};
 function pickPromotion(){
  // Resolves with 'q','r','b','n', or null if the player cancels.
  return new Promise(res=>{const box=$('promo'),row=box.firstChild;row.innerHTML='';

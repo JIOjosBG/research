@@ -11,20 +11,27 @@ import urllib.request
 import chess
 
 from .base import UsageMixin, describe_position
+from .pricing import PRICES
 
 DEFAULT_BASE_URL = "https://api.typesafe.ai"
-# USD per 1M input tokens; output tokens are free (TypeSafe list price).
-DEFAULT_INPUT_PRICE = 0.04
 
 
 class JevPlayer(UsageMixin):
+    label = "Jev"
+    key_env = "TYPESAFE_API_KEY"
+
+    @staticmethod
+    def list_models() -> list[dict]:
+        if not os.environ.get("TYPESAFE_API_KEY"):
+            raise RuntimeError("TYPESAFE_API_KEY is not set")
+        return [{"id": os.environ.get("JEV_MODEL", "jev-latest"), "name": "Jev (latest)"}]
     def __init__(self, model: str | None = None):
         self.key = os.environ.get("TYPESAFE_API_KEY")
         if not self.key:
             raise RuntimeError("TYPESAFE_API_KEY is not set")
         self.model = model or os.environ.get("JEV_MODEL", "jev-latest")
         self.url = os.environ.get("TYPESAFE_BASE_URL", DEFAULT_BASE_URL).rstrip("/") + "/v1/systemone"
-        self.input_price = float(os.environ.get("JEV_INPUT_PRICE_PER_MTOK", DEFAULT_INPUT_PRICE))
+        self.input_price = PRICES["jev"][0]  # output tokens are free
         self.reset_usage()
 
     def _evaluate(self, body: dict) -> dict:

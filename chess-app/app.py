@@ -4,7 +4,7 @@ import uuid
 import chess
 from flask import Flask, jsonify, request, send_from_directory
 
-from players import make_player
+from players import available_models, make_player
 
 try:  # optional .env support
     from dotenv import load_dotenv
@@ -53,12 +53,18 @@ def record_cost(g: dict, color: str, ply: int, player, san: str | None):
     u = getattr(player, "usage", None)
     if u and u["requests"]:
         g["costs"].append({"ply": ply, "color": color, "move": san,
-                           "provider": g["specs"][color]["type"], **u})
+                           "provider": g["specs"][color]["type"],
+                           "model": getattr(player, "model", None), **u})
 
 
 @app.get("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+@app.get("/api/models")
+def models():
+    return jsonify(available_models(refresh=request.args.get("refresh") == "1"))
 
 
 @app.post("/api/new")
