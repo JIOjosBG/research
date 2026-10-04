@@ -1,72 +1,69 @@
-# Chess
+# LLM Chess
 
-Flask chess app. Each side can be a **human** (click to move) or an AI model:
+Browser-only chess app (React + Vite). Each side is a **human** or an AI model
+from **Claude** (Anthropic), **ChatGPT** (OpenAI) or **Grok** (xAI).
 
-| Company | Player | API key variable |
-|---|---|---|
-| Anthropic | Claude (every model your key can use) | `ANTHROPIC_API_KEY` |
-| OpenAI | ChatGPT (every GPT / o-series chat model your key can use) | `OPENAI_API_KEY` |
-| xAI | Grok (every Grok text model your key can use) | `XAI_API_KEY` |
-| TypeSafe | Jev (System One decision model) | `TYPESAFE_API_KEY` |
-| TypeSafe + others | Jev router (Jev picks which model plays each move) | `TYPESAFE_API_KEY` + at least one LLM key |
+- **Your own account:** each user connects their own API keys, so AI moves use
+  that user's account, limits and billing. There is no server: keys stay in
+  the browser and go only to that company's API.
+- **Live model lists:** the White and Black lists show every model the user's
+  key can use, loaded live from each company.
+- **Rules:** full chess rules ([chess.js](https://github.com/jhlywa/chess.js)),
+  with drag-and-drop or click-to-move and a promotion picker.
+- **Cost tracking:** an estimated cost for every AI move, the total so far,
+  totals per side, and a game-over summary with a breakdown per model.
+- **Pause and resume:** stop an AI vs AI game at any time.
 
-The White and Black lists load the models live from each company's API, so
-new models appear without code changes. A company without a key shows
-"…_API_KEY is not set". Click **Refresh model lists** after you add a key
-(the list is cached for 10 minutes).
+## Why API keys and not "Sign in with …"
+None of the three companies offers a sign-in for third-party apps that pays
+for API use from the user's account. Anthropic does not allow Claude
+subscription sign-in in third-party apps. OpenAI's "Sign in with ChatGPT" is
+only for partner apps. xAI has no public sign-in program for third-party apps.
+So each user pastes an API key from their own developer console.
 
-Pawn promotion opens a picker (queen, rook, bishop, knight); click outside it
-to cancel.
-
-## Run
+## Run locally
 ```
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-export ANTHROPIC_API_KEY=...   # set only the keys you have
-export OPENAI_API_KEY=...
-export XAI_API_KEY=...
-export TYPESAFE_API_KEY=...
-.venv/bin/python app.py        # http://localhost:5000
+npm install
+npm run dev        # http://localhost:5173
+npm test           # unit tests
+npm run build      # static site in dist/
 ```
-Optional: `CHESS_CLAUDE_MODEL` (default when no model is given:
-`claude-opus-5-5`), `JEV_MODEL` (default `jev-latest`), and base URL
-overrides `OPENAI_BASE_URL`, `XAI_BASE_URL`, `TYPESAFE_BASE_URL`.
 
-## How the text models play
-Claude, ChatGPT and Grok get the position (FEN, move history, legal moves)
-and must answer with one legal move in UCI notation. An illegal answer is
-retried up to 3 times. ChatGPT and Grok use the Responses API
-(`POST /v1/responses`); Claude uses the Messages API.
+## Host it
+`npm run build` makes a static site in `dist/`. Any static host works, with no
+server and no secrets:
 
-## How the Jev router plays
-Each move, the app asks Jev one `choice` question. The `state` holds the
-position and the legal moves; the `criteria` are all Claude, ChatGPT and Grok
-models your keys can use, each with its price from `players/pricing.py`. Jev
-is told to use strong, expensive models for critical positions and cheap
-models for simple ones. The chosen model then picks the move. The cost panel
-shows which model played each move (`→ model`), and the move's cost includes
-the Jev request plus the chosen model's requests.
+| Host | How |
+|---|---|
+| Netlify / Cloudflare Pages / Vercel | Connect the repo, set the base directory to `chess-app`, build command `npm run build`, output directory `dist` |
+| GitHub Pages | Build, then publish the `dist/` folder (for example with the `actions/deploy-pages` action) |
+| Anything else | Upload the contents of `dist/` |
 
-## API cost
-Every API call returns the tokens it used (Claude, ChatGPT and Grok return
-input and output tokens; Jev returns its usage too), so the app knows each
-move's cost from the public prices. The side panel shows each AI move's
-tokens and cost, the **total cost so far** after every move, and totals per
-side. When the game ends, a summary shows the total cost of the game with a
-breakdown per model. A total marked "≥" is a lower bound, because some
-model has no price in the table. The app calculates it from the token
-counts that each API returns and the list prices in `players/pricing.py`.
-Edit that table when prices change; a model that is not in it shows "n/a".
-Retries and failed moves are included. The real billed amount is in each
-company's console.
+The build uses relative paths, so it also works from a sub-folder.
 
-## How Jev plays
-Jev does not write text. The app sends the position as `state` and asks one
-`choice` question whose `criteria` are the legal moves
-(`POST /v1/systemone`). The app plays Jev's `choice`, or the most probable
-legal move if the choice is missing.
+## Browser access (CORS)
+The browser calls the APIs directly. Anthropic allows this, and the app sends
+the required header. If a company's API refuses calls from a browser, the
+app shows "the browser could not reach the API (network or CORS)". Then set
+a **proxy URL** for that company under *API keys → Advanced*. The app sends
+the same requests to that URL instead.
 
-## Add another company
-Subclass `LLMPlayer` (`players/base.py`), implement `_complete(prompt) -> str`
-and `list_models()`, then register it in `PROVIDERS` in `players/__init__.py`.
-An OpenAI-compatible API only needs a small subclass of `OpenAICompatPlayer`
-(see `GrokPlayer` in `players/openai_compat.py`).
+## Prices
+Costs are estimates: the token counts that each API returns × the list
+prices in `src/pricing.ts`. Edit that table when prices change; a model that
+is not in it shows "n/a", and totals become "≥". Each company's console has
+the billed amount.
+
+## Code
+| File | What it does |
+|---|---|
+| `src/App.tsx` | Game state, AI turn loop, board |
+| `src/llm.ts` | Prompt, move parsing, 3 retries for illegal replies |
+| `src/providers/` | `claude.ts` (Anthropic SDK); `openaiCompat.ts` (ChatGPT and Grok via the Responses API) |
+| `src/pricing.ts` | Price table |
+| `src/keys.ts` | Key storage (memory, or localStorage with "Remember") |
+| `src/components/` | Dialogs and panels |
+
+To add a company with an OpenAI-compatible API, add one `makeProvider({...})`
+call in `src/providers/openaiCompat.ts` and register it in
+`src/providers/index.ts`.
