@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chess</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;color:#eee;display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+#board{display:grid;grid-template-columns:repeat(8,min(11vw,64px));border:2px solid #555}
+.sq{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:min(8vw,46px);cursor:pointer;user-select:none}
+.l{background:#eed9b6;color:#000}.d{background:#b58863;color:#000}
+.sel{outline:3px solid #4af;outline-offset:-3px}.tgt{box-shadow:inset 0 0 0 100px rgba(0,200,0,.3)}.chk{background:#e66}
+.panel{width:260px}select,button{width:100%;margin:4px 0;padding:6px}
+#hist{height:200px;overflow:auto;background:#111;padding:8px;font-family:monospace}
+#status{margin:8px 0;font-weight:bold}
+</style></head><body>
+<div id="board"></div>
+<div class="panel">
+ <h3>New game</h3>
+ White <select id="w"><option value="human">Human</option><option value="claude">Claude (API)</option></select>
+ Black <select id="b"><option value="human">Human</option><option value="claude">Claude (API)</option></select>
+ <button onclick="newGame()">Start</button>
+ <div id="status"></div><div id="hist"></div>
+</div>
+<script>
+const G={w:'♔♕♖♗♘♙',b:'♚♛♜♝♞♟'};
+const SYM={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+let S=null,sel=null,busy=false;
+const $=id=>document.getElementById(id);
+async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok)throw new Error(j.error);return j}
+async function newGame(){try{S=await api('/api/new',{white:{type:$('w').value},black:{type:$('b').value}});sel=null;render();loop()}catch(e){$('status').textContent=e.message}}
+function isHuman(){return S.players[S.turn].type==='human'}
+async function loop(){
+ if(busy)return;busy=true;
+ while(S&&!S.over&&!isHuman()){
+  $('status').textContent=S.turn+' (AI) is thinking…';
+  try{S=await api('/api/ai_move/'+S.id,{});render()}catch(e){$('status').textContent='AI error: '+e.message;busy=false;return}
+ }
+ busy=false;render();
+}
+function render(){
+ const fen=S.fen.split(' ')[0].split('/');const sq=[];
+ fen.forEach((row,r)=>{let f=0;for(const c of row){if(/\d/.test(c))for(let i=0;i<+c;i++)sq.push({r,f:f++,p:null});else sq.push({r,f:f++,p:c})}});
+ const kingSq=S.check?sq.find(s=>s.p===(S.turn==='white'?'K':'k')):null;
+ const tg=sel?S.legal.filter(m=>m.startsWith(sel)).map(m=>m.slice(2,4)):[];
+ $('board').innerHTML='';
+ for(const s of sq){const name='abcdefgh'[s.f]+(8-s.r);const d=document.createElement('div');
+  d.className='sq '+((s.r+s.f)%2?'d':'l')+(sel===name?' sel':'')+(tg.includes(name)?' tgt':'')+(kingSq===s?' chk':'');
+  if(s.p){d.textContent=SYM[s.p];d.style.color=s.p===s.p.toUpperCase()?'#fff':'#000';d.style.textShadow=s.p===s.p.toUpperCase()?'0 0 2px #000,0 0 2px #000,0 0 2px #000':'none'}
+  d.onclick=()=>click(name,s.p);$('board').appendChild(d)}
+ $('hist').textContent=S.history.map((m,i)=>(i%2?'':(i/2+1|0)+'. ')+m).join(' ');
+ if(S.over)$('status').textContent='Game over: '+S.result+' ('+S.outcome+')';
+ else if(!busy)$('status').textContent=S.turn+' to move'+(S.check?' (check)':'');
+}
+async function click(name,p){
+ if(!S||S.over||busy||!isHuman())return;
+ const mine=p&&(p===p.toUpperCase())===(S.turn==='white');
+ if(sel&&S.legal.some(m=>m.startsWith(sel+name))){
+  let uci=sel+name;if(!S.legal.includes(uci))uci+='q'; // auto-queen
+  try{S=await api('/api/move/'+S.id,{uci});sel=null;render();loop()}catch(e){$('status').textContent=e.message}
+ }else{sel=mine?name:null;render()}
+}
+</script></body></html>
