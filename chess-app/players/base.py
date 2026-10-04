@@ -45,13 +45,36 @@ def parse_move(board: chess.Board, text: str) -> chess.Move:
     raise ValueError(f"no legal move found in reply: {text[:200]!r}")
 
 
-class LLMPlayer:
+class UsageMixin:
+    """Tracks token usage and estimated cost (USD) of the most recent move.
+
+    `self.usage` is reset at the start of each move, so it also covers
+    retries and moves that end in an error.
+    """
+
+    def reset_usage(self):
+        self.usage = {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "requests": 0}
+
+    def add_usage(self, input_tokens: int, output_tokens: int, cost_usd: float | None):
+        u = self.usage
+        u["input_tokens"] += input_tokens
+        u["output_tokens"] += output_tokens
+        u["requests"] += 1
+        if cost_usd is None or u["cost_usd"] is None:
+            u["cost_usd"] = None  # price unknown for this model
+        else:
+            u["cost_usd"] += cost_usd
+
+
+class LLMPlayer(UsageMixin):
     max_attempts = 3
 
     def _complete(self, prompt: str) -> str:
+        """Return the model's reply text and call `add_usage` for the request."""
         raise NotImplementedError
 
     def choose_move(self, board: chess.Board) -> chess.Move:
+        self.reset_usage()
         feedback = None
         for _ in range(self.max_attempts):
             reply = self._complete(build_prompt(board, feedback))

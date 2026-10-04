@@ -10,6 +10,9 @@ body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;colo
 .panel{width:260px}select,button{width:100%;margin:4px 0;padding:6px}
 #hist{height:200px;overflow:auto;background:#111;padding:8px;font-family:monospace}
 #status{margin:8px 0;font-weight:bold}
+#cost{margin-top:12px;font-size:13px}#cost table{width:100%;border-collapse:collapse}
+#cost td,#cost th{padding:2px 4px;text-align:right;border-bottom:1px solid #333}#cost td:first-child,#cost th:first-child{text-align:left}
+#costlog{max-height:160px;overflow:auto}
 #promo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center}
 #promo div{background:#eed9b6;padding:12px;border-radius:8px;display:flex;gap:8px}
 #promo span{font-size:52px;cursor:pointer;padding:4px 10px;border-radius:6px}#promo span:hover{background:#b58863}
@@ -21,6 +24,7 @@ body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;colo
  Black <select id="b"><option value="human">Human</option><option value="claude">Claude (API)</option><option value="jev">Jev (TypeSafe API)</option></select>
  <button onclick="newGame()">Start</button>
  <div id="status"></div><div id="hist"></div>
+ <div id="cost"></div>
 </div>
 <div id="promo"><div></div></div>
 <script>
@@ -50,6 +54,7 @@ function render(){
   if(s.p){d.textContent=SYM[s.p];d.style.color=s.p===s.p.toUpperCase()?'#fff':'#000';d.style.textShadow=s.p===s.p.toUpperCase()?'0 0 2px #000,0 0 2px #000,0 0 2px #000':'none'}
   d.onclick=()=>click(name,s.p);$('board').appendChild(d)}
  $('hist').textContent=S.history.map((m,i)=>(i%2?'':(i/2+1|0)+'. ')+m).join(' ');
+ renderCost();
  if(S.over)$('status').textContent='Game over: '+S.result+' ('+S.outcome+')';
  else if(!busy)$('status').textContent=S.turn+' to move'+(S.check?' (check)':'');
 }
@@ -61,6 +66,16 @@ async function click(name,p){
   if(!S.legal.includes(uci)){const pc=await pickPromotion();if(!pc)return;uci+=pc}
   try{S=await api('/api/move/'+S.id,{uci});sel=null;render();loop()}catch(e){$('status').textContent=e.message}
  }else{sel=mine?name:null;render()}
+}
+const usd=v=>v==null?'n/a':'$'+v.toFixed(v<0.01?5:4);
+function renderCost(){
+ const ai=['white','black'].filter(c=>S.players[c].type!=='human');
+ if(!ai.length){$('cost').innerHTML='';return}
+ let h='<b>API cost (estimate)</b><table><tr><th>Side</th><th>In tok</th><th>Out tok</th><th>Cost</th></tr>';
+ for(const c of ai){const t=S.totals[c];h+=`<tr><td>${c} (${S.players[c].type})</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${usd(t.cost_usd)}</td></tr>`}
+ h+='</table><div id="costlog"><table><tr><th>Move</th><th>Req</th><th>In</th><th>Out</th><th>Cost</th></tr>';
+ for(const x of [...S.costs].reverse())h+=`<tr><td>${(x.ply/2|0)+1}${x.color==='white'?'.':'...'} ${x.move??'(error)'}</td><td>${x.requests}</td><td>${x.input_tokens}</td><td>${x.output_tokens}</td><td>${usd(x.cost_usd)}</td></tr>`;
+ $('cost').innerHTML=h+'</table></div>';
 }
 function pickPromotion(){
  // Resolves with 'q','r','b','n', or null if the player cancels.

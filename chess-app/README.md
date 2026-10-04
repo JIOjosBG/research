@@ -12,8 +12,16 @@ export ANTHROPIC_API_KEY=sk-ant-...   # for Claude players
 export TYPESAFE_API_KEY=...           # for Jev players
 .venv/bin/python app.py               # http://localhost:5000
 ```
-Optional: `CHESS_CLAUDE_MODEL` (default `claude-sonnet-5-5`), `JEV_MODEL`
+Optional: `CHESS_CLAUDE_MODEL` (default `claude-opus-5-5`), `JEV_MODEL`
 (default `jev-latest`), `TYPESAFE_BASE_URL` (default `https://api.typesafe.ai`).
+
+## API cost
+Each AI move shows its token counts and an estimated cost in USD in the
+side panel (per move and per side). The app calculates it from the token
+counts that each API returns and the list prices in `players/claude.py`
+(`PRICES`) and `players/jev.py` (`JEV_INPUT_PRICE_PER_MTOK`, default $0.04 per
+1M input tokens; output is free). Retries and failed moves are included.
+The real billed amount is in the Anthropic Console and the TypeSafe console.
 
 ## How Jev plays
 Jev does not write text. The app sends the position as `state` and asks one

@@ -31,6 +31,15 @@ def state(gid: str) -> dict:
         "result": b.result() if b.is_game_over() else None,
         "outcome": b.outcome().termination.name if b.outcome() else None,
         "players": g["specs"],
+        "costs": g["costs"],
+        "totals": {
+            c: {
+                "cost_usd": sum(x["cost_usd"] or 0 for x in g["costs"] if x["color"] == c),
+                "input_tokens": sum(x["input_tokens"] for x in g["costs"] if x["color"] == c),
+                "output_tokens": sum(x["output_tokens"] for x in g["costs"] if x["color"] == c),
+            }
+            for c in ("white", "black")
+        },
     }
 
 
@@ -38,6 +47,13 @@ def apply(gid: str, move: chess.Move):
     g = GAMES[gid]
     g["san"].append(g["board"].san(move))
     g["board"].push(move)
+
+
+def record_cost(g: dict, color: str, ply: int, player, san: str | None):
+    u = getattr(player, "usage", None)
+    if u and u["requests"]:
+        g["costs"].append({"ply": ply, "color": color, "move": san,
+                           "provider": g["specs"][color]["type"], **u})
 
 
 @app.get("/")
@@ -55,7 +71,8 @@ def new_game():
     except Exception as e:
         return jsonify(error=str(e)), 400
     gid = uuid.uuid4().hex[:8]
-    GAMES[gid] = {"board": chess.Board(), "san": [], "players": players, "specs": specs}
+    GAMES[gid] = {"board": chess.Board(), "san": [], "players": players, "specs": specs,
+                  "costs": []}
     return jsonify(state(gid))
 
 
@@ -95,10 +112,13 @@ def ai_move(gid):
     player = g["players"][color]
     if player is None:
         return jsonify(error=f"{color} is human"), 400
+    ply = len(g["san"])
     try:
         mv = player.choose_move(g["board"])
     except Exception as e:
+        record_cost(g, color, ply, player, None)  # failed requests still cost money
         return jsonify(error=str(e)), 502
+    record_cost(g, color, ply, player, g["board"].san(mv))
     apply(gid, mv)
     return jsonify(state(gid))
 
