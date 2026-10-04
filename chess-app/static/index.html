@@ -10,15 +10,19 @@ body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;colo
 .panel{width:260px}select,button{width:100%;margin:4px 0;padding:6px}
 #hist{height:200px;overflow:auto;background:#111;padding:8px;font-family:monospace}
 #status{margin:8px 0;font-weight:bold}
+#promo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center}
+#promo div{background:#eed9b6;padding:12px;border-radius:8px;display:flex;gap:8px}
+#promo span{font-size:52px;cursor:pointer;padding:4px 10px;border-radius:6px}#promo span:hover{background:#b58863}
 </style></head><body>
 <div id="board"></div>
 <div class="panel">
  <h3>New game</h3>
- White <select id="w"><option value="human">Human</option><option value="claude">Claude (API)</option></select>
- Black <select id="b"><option value="human">Human</option><option value="claude">Claude (API)</option></select>
+ White <select id="w"><option value="human">Human</option><option value="claude">Claude (API)</option><option value="jev">Jev (TypeSafe API)</option></select>
+ Black <select id="b"><option value="human">Human</option><option value="claude">Claude (API)</option><option value="jev">Jev (TypeSafe API)</option></select>
  <button onclick="newGame()">Start</button>
  <div id="status"></div><div id="hist"></div>
 </div>
+<div id="promo"><div></div></div>
 <script>
 const G={w:'♔♕♖♗♘♙',b:'♚♛♜♝♞♟'};
 const SYM={K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
@@ -53,8 +57,19 @@ async function click(name,p){
  if(!S||S.over||busy||!isHuman())return;
  const mine=p&&(p===p.toUpperCase())===(S.turn==='white');
  if(sel&&S.legal.some(m=>m.startsWith(sel+name))){
-  let uci=sel+name;if(!S.legal.includes(uci))uci+='q'; // auto-queen
+  let uci=sel+name;
+  if(!S.legal.includes(uci)){const pc=await pickPromotion();if(!pc)return;uci+=pc}
   try{S=await api('/api/move/'+S.id,{uci});sel=null;render();loop()}catch(e){$('status').textContent=e.message}
  }else{sel=mine?name:null;render()}
+}
+function pickPromotion(){
+ // Resolves with 'q','r','b','n', or null if the player cancels.
+ return new Promise(res=>{const box=$('promo'),row=box.firstChild;row.innerHTML='';
+  const white=S.turn==='white';
+  for(const [k,w,b] of [['q','♕','♛'],['r','♖','♜'],['b','♗','♝'],['n','♘','♞']]){
+   const sp=document.createElement('span');sp.textContent=white?w:b;sp.title=k;
+   sp.onclick=e=>{e.stopPropagation();box.style.display='none';res(k)};row.appendChild(sp)}
+  box.onclick=()=>{box.style.display='none';sel=null;render();res(null)};
+  box.style.display='flex'})
 }
 </script></body></html>

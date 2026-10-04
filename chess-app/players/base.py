@@ -7,7 +7,7 @@ SYSTEM = (
 )
 
 
-def build_prompt(board: chess.Board, feedback: str | None = None) -> str:
+def describe_position(board: chess.Board) -> str:
     color = "White" if board.turn == chess.WHITE else "Black"
     history = []
     replay = chess.Board()
@@ -17,11 +17,12 @@ def build_prompt(board: chess.Board, feedback: str | None = None) -> str:
     pgn = " ".join(
         f"{i // 2 + 1}.{m}" if i % 2 == 0 else m for i, m in enumerate(history)
     )
+    return f"You play {color}.\nFEN: {board.fen()}\nMoves so far: {pgn or '(none)'}\n"
+
+
+def build_prompt(board: chess.Board, feedback: str | None = None) -> str:
     legal = " ".join(m.uci() for m in board.legal_moves)
-    text = (
-        f"You play {color}.\nFEN: {board.fen()}\nMoves so far: {pgn or '(none)'}\n"
-        f"Legal moves (UCI): {legal}\n"
-    )
+    text = describe_position(board) + f"Legal moves (UCI): {legal}\n"
     if feedback:
         text += f"\nYour previous answer was rejected: {feedback}\n"
     return text + "\nYour move (UCI):"
