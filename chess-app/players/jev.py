@@ -2,6 +2,7 @@
 
 Jev returns typed decisions instead of text. We ask one "choice" question
 whose criteria are the legal moves, and play the chosen move.
+See jev_router.py for the player that uses Jev to pick a model instead.
 """
 import json
 import os
@@ -25,6 +26,7 @@ class JevPlayer(UsageMixin):
         if not os.environ.get("TYPESAFE_API_KEY"):
             raise RuntimeError("TYPESAFE_API_KEY is not set")
         return [{"id": os.environ.get("JEV_MODEL", "jev-latest"), "name": "Jev (latest)"}]
+
     def __init__(self, model: str | None = None):
         self.key = os.environ.get("TYPESAFE_API_KEY")
         if not self.key:
@@ -47,29 +49,35 @@ class JevPlayer(UsageMixin):
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"Jev API error {e.code}: {e.read().decode(errors='replace')[:300]}")
 
-    def choose_move(self, board: chess.Board) -> chess.Move:
-        self.reset_usage()
-        criteria = {m.uci(): f"Play {board.san(m)}" for m in board.legal_moves}
+    def ask_choice(self, state: str, instructions: str, criteria: dict[str, str]) -> tuple[str, dict]:
+        """Ask Jev one choice question. Returns (chosen key, full answer).
+
+        Uses Jev's choice; if it is missing or not a criterion, takes the most
+        probable criterion. Token usage is added to `self.usage`.
+        """
         data = self._evaluate({
             "model": self.model,
-            "state": describe_position(board),
+            "state": state,
             "questions": {
-                "move": {
-                    "type": "choice",
-                    "instructions": "Pick the strongest chess move for the side to move.",
-                    "criteria": criteria,
-                }
+                "pick": {"type": "choice", "instructions": instructions, "criteria": criteria}
             },
         })
         usage = data.get("usage", {})
         in_tok, out_tok = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
         self.add_usage(in_tok, out_tok, in_tok * self.input_price / 1_000_000)
-        answer = data.get("answers", {}).get("move", {})
-        # Use the chosen move; if missing or illegal, take the most probable legal one.
-        ranked = [answer.get("choice")] + sorted(
-            answer.get("probabilities", {}), key=lambda k: -answer["probabilities"][k]
+        answer = data.get("answers", {}).get("pick", {})
+        probs = answer.get("probabilities", {})
+        for key in [answer.get("choice")] + sorted(probs, key=lambda k: -probs[k]):
+            if key in criteria:
+                return key, answer
+        raise RuntimeError(f"Jev returned no valid choice: {json.dumps(answer)[:300]}")
+
+    def choose_move(self, board: chess.Board) -> chess.Move:
+        self.reset_usage()
+        criteria = {m.uci(): f"Play {board.san(m)}" for m in board.legal_moves}
+        uci, _ = self.ask_choice(
+            describe_position(board),
+            "Pick the strongest chess move for the side to move.",
+            criteria,
         )
-        for uci in ranked:
-            if uci in criteria:
-                return chess.Move.from_uci(uci)
-        raise RuntimeError(f"Jev returned no legal move: {json.dumps(answer)[:300]}")
+        return chess.Move.from_uci(uci)

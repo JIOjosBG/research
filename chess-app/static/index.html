@@ -76,7 +76,7 @@ function renderCost(){
  let h='<b>API cost (estimate)</b><table><tr><th>Side</th><th>In tok</th><th>Out tok</th><th>Cost</th></tr>';
  for(const c of ai){const t=S.totals[c];h+=`<tr><td>${c} (${who(c)})</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${usd(t.cost_usd)}</td></tr>`}
  h+='</table><div id="costlog"><table><tr><th>Move</th><th>Req</th><th>In</th><th>Out</th><th>Cost</th></tr>';
- for(const x of [...S.costs].reverse())h+=`<tr><td>${(x.ply/2|0)+1}${x.color==='white'?'.':'...'} ${x.move??'(error)'}</td><td>${x.requests}</td><td>${x.input_tokens}</td><td>${x.output_tokens}</td><td>${usd(x.cost_usd)}</td></tr>`;
+ for(const x of [...S.costs].reverse())h+=`<tr><td>${(x.ply/2|0)+1}${x.color==='white'?'.':'...'} ${x.move??'(error)'}${x.routed_to?'<br><small>→ '+x.routed_to.split('|')[1]+'</small>':''}</td><td>${x.requests}</td><td>${x.input_tokens}</td><td>${x.output_tokens}</td><td>${usd(x.cost_usd)}</td></tr>`;
  $('cost').innerHTML=h+'</table></div>';
 }
 async function loadModels(refresh){

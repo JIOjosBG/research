@@ -8,6 +8,7 @@ Flask chess app. Each side can be a **human** (click to move) or an AI model:
 | OpenAI | ChatGPT (every GPT / o-series chat model your key can use) | `OPENAI_API_KEY` |
 | xAI | Grok (every Grok text model your key can use) | `XAI_API_KEY` |
 | TypeSafe | Jev (System One decision model) | `TYPESAFE_API_KEY` |
+| TypeSafe + others | Jev router (Jev picks which model plays each move) | `TYPESAFE_API_KEY` + at least one LLM key |
 
 The White and Black lists load the models live from each company's API, so
 new models appear without code changes. A company without a key shows
@@ -35,6 +36,15 @@ Claude, ChatGPT and Grok get the position (FEN, move history, legal moves)
 and must answer with one legal move in UCI notation. An illegal answer is
 retried up to 3 times. ChatGPT and Grok use the Responses API
 (`POST /v1/responses`); Claude uses the Messages API.
+
+## How the Jev router plays
+Each move, the app asks Jev one `choice` question. The `state` holds the
+position and the legal moves; the `criteria` are all Claude, ChatGPT and Grok
+models your keys can use, each with its price from `players/pricing.py`. Jev
+is told to use strong, expensive models for critical positions and cheap
+models for simple ones. The chosen model then picks the move. The cost panel
+shows which model played each move (`→ model`), and the move's cost includes
+the Jev request plus the chosen model's requests.
 
 ## API cost
 Each AI move shows its token counts and an estimated cost in USD in the

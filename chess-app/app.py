@@ -54,7 +54,8 @@ def record_cost(g: dict, color: str, ply: int, player, san: str | None):
     if u and u["requests"]:
         g["costs"].append({"ply": ply, "color": color, "move": san,
                            "provider": g["specs"][color]["type"],
-                           "model": getattr(player, "model", None), **u})
+                           "model": getattr(player, "model", None),
+                           "routed_to": getattr(player, "last_choice", None), **u})
 
 
 @app.get("/")

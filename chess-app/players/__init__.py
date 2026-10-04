@@ -8,6 +8,7 @@ import time
 
 from .claude import ClaudePlayer
 from .jev import JevPlayer
+from .jev_router import JevRouterPlayer
 from .openai_compat import GrokPlayer, OpenAIPlayer
 
 PROVIDERS = {
@@ -15,6 +16,7 @@ PROVIDERS = {
     "openai": OpenAIPlayer,
     "grok": GrokPlayer,
     "jev": JevPlayer,
+    "jev-router": JevRouterPlayer,
 }
 
 _cache: dict = {"at": 0.0, "data": None}
@@ -38,7 +40,7 @@ def available_models(refresh: bool = False) -> list[dict]:
 
 
 def make_player(spec: dict):
-    """spec: {"type": "human"} or {"type": "claude" | "openai" | "grok" | "jev", "model": ...}"""
+    """spec: {"type": "human"} or {"type": "claude" | "openai" | "grok" | "jev" | "jev-router", "model": ...}"""
     kind = spec.get("type", "human")
     if kind == "human":
         return None
