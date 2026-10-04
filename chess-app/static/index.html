@@ -7,12 +7,14 @@ body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#222;colo
 .sq{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:min(8vw,46px);cursor:pointer;user-select:none}
 .l{background:#eed9b6;color:#000}.d{background:#b58863;color:#000}
 .sel{outline:3px solid #4af;outline-offset:-3px}.tgt{box-shadow:inset 0 0 0 100px rgba(0,200,0,.3)}.chk{background:#e66}
-.panel{width:260px}select,button{width:100%;margin:4px 0;padding:6px}
-#hist{height:200px;overflow:auto;background:#111;padding:8px;font-family:monospace}
+.panel{width:300px}select,button{width:100%;margin:4px 0;padding:6px}
+#hist{height:110px;overflow:auto;background:#111;padding:8px;font-family:monospace}
 #status{margin:8px 0;font-weight:bold}
 #cost{margin-top:12px;font-size:13px}#cost table{width:100%;border-collapse:collapse}
 #cost td,#cost th{padding:2px 4px;text-align:right;border-bottom:1px solid #333}#cost td:first-child,#cost th:first-child{text-align:left}
 #costlog{max-height:160px;overflow:auto}
+.running{margin:6px 0;font-size:15px}
+.summary{background:#2d4a2d;border:1px solid #5a5;border-radius:6px;padding:8px;margin-bottom:8px}
 #promo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center}
 #promo div{background:#eed9b6;padding:12px;border-radius:8px;display:flex;gap:8px}
 #promo span{font-size:52px;cursor:pointer;padding:4px 10px;border-radius:6px}#promo span:hover{background:#b58863}
@@ -57,7 +59,7 @@ function render(){
   d.onclick=()=>click(name,s.p);$('board').appendChild(d)}
  $('hist').textContent=S.history.map((m,i)=>(i%2?'':(i/2+1|0)+'. ')+m).join(' ');
  renderCost();
- if(S.over)$('status').textContent='Game over: '+S.result+' ('+S.outcome+')';
+ if(S.over)$('status').textContent='Game over: '+S.result+' ('+S.outcome+')'+(S.costs.length?' · total API cost '+usdT(S.grand_total):'');
  else if(!busy)$('status').textContent=S.turn+' to move'+(S.check?' (check)':'');
 }
 async function click(name,p){
@@ -70,13 +72,23 @@ async function click(name,p){
  }else{sel=mine?name:null;render()}
 }
 const usd=v=>v==null?'n/a':'$'+v.toFixed(v<0.01?5:4);
+const usdT=t=>(t.unknown_price?'≥ ':'')+usd(t.cost_usd);  // "≥" when some prices are unknown
 function renderCost(){
  const ai=['white','black'].filter(c=>S.players[c].type!=='human');
  if(!ai.length){$('cost').innerHTML='';return}
- let h='<b>API cost (estimate)</b><table><tr><th>Side</th><th>In tok</th><th>Out tok</th><th>Cost</th></tr>';
- for(const c of ai){const t=S.totals[c];h+=`<tr><td>${c} (${who(c)})</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${usd(t.cost_usd)}</td></tr>`}
- h+='</table><div id="costlog"><table><tr><th>Move</th><th>Req</th><th>In</th><th>Out</th><th>Cost</th></tr>';
- for(const x of [...S.costs].reverse())h+=`<tr><td>${(x.ply/2|0)+1}${x.color==='white'?'.':'...'} ${x.move??'(error)'}${x.routed_to?'<br><small>→ '+x.routed_to.split('|')[1]+'</small>':''}</td><td>${x.requests}</td><td>${x.input_tokens}</td><td>${x.output_tokens}</td><td>${usd(x.cost_usd)}</td></tr>`;
+ const G=S.grand_total;let h='';
+ if(S.over){
+  h+=`<div class="summary"><b>Game over: ${S.result}. Total API cost: ${usdT(G)}</b>
+   <div>${G.moves} AI moves, ${G.requests} requests, ${G.input_tokens} input + ${G.output_tokens} output tokens</div>
+   <table><tr><th>Model</th><th>Moves</th><th>Tokens in/out</th><th>Cost</th></tr>`;
+  for(const [m,t] of Object.entries(S.by_model))h+=`<tr><td>${m}</td><td>${t.moves}</td><td>${t.input_tokens}/${t.output_tokens}</td><td>${usdT(t)}</td></tr>`;
+  h+='</table>'+(G.unknown_price?'<small>≥: some models have no price in players/pricing.py, so the real total is higher.</small>':'')+'</div>';
+ }
+ h+=`<div class="running">Total cost so far: <b>${usdT(G)}</b></div>`;
+ h+='<table><tr><th>Side</th><th>In tok</th><th>Out tok</th><th>Cost</th></tr>';
+ for(const c of ai){const t=S.totals[c];h+=`<tr><td>${c} (${who(c)})</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${usdT(t)}</td></tr>`}
+ h+='</table><div id="costlog"><table><tr><th>Move</th><th>Req</th><th>In</th><th>Out</th><th>Cost</th><th>Total so far</th></tr>';
+ for(const x of [...S.costs].reverse())h+=`<tr><td>${(x.ply/2|0)+1}${x.color==='white'?'.':'...'} ${x.move??'(error)'}${x.routed_to?'<br><small>→ '+x.routed_to.split('|')[1]+'</small>':''}</td><td>${x.requests}</td><td>${x.input_tokens}</td><td>${x.output_tokens}</td><td>${usd(x.cost_usd)}</td><td>${usd(x.total_so_far)}</td></tr>`;
  $('cost').innerHTML=h+'</table></div>';
 }
 async function loadModels(refresh){

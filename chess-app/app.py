@@ -32,14 +32,32 @@ def state(gid: str) -> dict:
         "outcome": b.outcome().termination.name if b.outcome() else None,
         "players": g["specs"],
         "costs": g["costs"],
-        "totals": {
-            c: {
-                "cost_usd": sum(x["cost_usd"] or 0 for x in g["costs"] if x["color"] == c),
-                "input_tokens": sum(x["input_tokens"] for x in g["costs"] if x["color"] == c),
-                "output_tokens": sum(x["output_tokens"] for x in g["costs"] if x["color"] == c),
-            }
-            for c in ("white", "black")
+        "totals": {c: summarize([x for x in g["costs"] if x["color"] == c]) for c in ("white", "black")},
+        "grand_total": summarize(g["costs"]),
+        "by_model": {
+            m: summarize([x for x in g["costs"] if played_by(x) == m])
+            for m in dict.fromkeys(played_by(x) for x in g["costs"])
         },
+    }
+
+
+def played_by(entry: dict) -> str:
+    """Model that chose the move (for the Jev router: Jev + the routed model)."""
+    if entry["routed_to"]:
+        return "Jev router → " + entry["routed_to"].split("|", 1)[1]
+    return entry["model"] or entry["provider"]
+
+
+def summarize(entries: list[dict]) -> dict:
+    """Sum cost and tokens. `unknown_price` is true when some entry had no price,
+    so `cost_usd` is then a lower bound."""
+    return {
+        "cost_usd": sum(x["cost_usd"] or 0 for x in entries),
+        "unknown_price": any(x["cost_usd"] is None for x in entries),
+        "input_tokens": sum(x["input_tokens"] for x in entries),
+        "output_tokens": sum(x["output_tokens"] for x in entries),
+        "requests": sum(x["requests"] for x in entries),
+        "moves": len(entries),
     }
 
 
@@ -56,6 +74,8 @@ def record_cost(g: dict, color: str, ply: int, player, san: str | None):
                            "provider": g["specs"][color]["type"],
                            "model": getattr(player, "model", None),
                            "routed_to": getattr(player, "last_choice", None), **u})
+        # Running total of the game after this move.
+        g["costs"][-1]["total_so_far"] = summarize(g["costs"])["cost_usd"]
 
 
 @app.get("/")

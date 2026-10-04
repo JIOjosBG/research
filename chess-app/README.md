@@ -47,8 +47,13 @@ shows which model played each move (`→ model`), and the move's cost includes
 the Jev request plus the chosen model's requests.
 
 ## API cost
-Each AI move shows its token counts and an estimated cost in USD in the
-side panel (per move and per side). The app calculates it from the token
+Every API call returns the tokens it used (Claude, ChatGPT and Grok return
+input and output tokens; Jev returns its usage too), so the app knows each
+move's cost from the public prices. The side panel shows each AI move's
+tokens and cost, the **total cost so far** after every move, and totals per
+side. When the game ends, a summary shows the total cost of the game with a
+breakdown per model. A total marked "≥" is a lower bound, because some
+model has no price in the table. The app calculates it from the token
 counts that each API returns and the list prices in `players/pricing.py`.
 Edit that table when prices change; a model that is not in it shows "n/a".
 Retries and failed moves are included. The real billed amount is in each
